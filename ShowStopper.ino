@@ -1,42 +1,54 @@
 /* 
-	ShowStopper By Andrea Campanella (emuboy85@gmail.com)_
+  ShowStopper By Andrea Campanella (emuboy85@gmail.com)_
 
-	A Safety break system for AC motor:
+  A Safety break system for AC motor:
 
-	CoilA and CoilB are connected to two of the 3 phase AC motor, pumping DC into it, forcing it to stop.
-
-	Input is debouced.
-
+  EmergencyStopButton is the input from the user.
+  InhibitUserControl disable the start/stop button and EmergencyStopButton , once the system is breaking the motor, nothing will stop it.
+  DCInject is a relay output to 2 coils of the 3 phase motor, runnin DC in a AC motor this way will break it's run.
 */
 
-const int SafeStop = 1;    		// the number of the pushbutton pin
-const int CoilA = 0;      		// the number of the Coil A pin
-const int CoilB = 2;     		// the number of the Coil B pin
 
-int StopMotor = LOW;         	// the current state of the output pin
-int StopMotorState;             // the current reading from the input pin
-int lastStopMotorState = LOW;   // the previous reading from the input pin
+const int EmergencyStopButton = 1;    // in
+const int InhibitUserControl = 0;     // output
+const int DCInject = 2;               // output
 
-long lastDebounceTime = 0;  	// the last time the output pin was toggled
-long debounceDelay = 50;    	// the debounce time; increase if the output flickers , in milliseconds
-int breake_duration = 10000; 	//how long the motor will breake.In seconds
+//to be chaged according the system
+int EmergencyStopButtonState;                         // the current reading from the input pin
+int LastEmergencyStopButtonState      = LOW;          // the previous reading from the input pin
+int EmergencyStopButtonTriggeredState = HIGH          // the triggered state of the input pin 
+int InhibitUserControlState           = HIGH;         // the active state of the output pin
+int DCInjectState                     = HIGH;         // the active state of the output pin
+
+// the following variables are long's because the time, measured in miliseconds,
+// will quickly become a bigger number than can be stored in an int.
+
+long lastDebounceTime = 0;  // the last time the output pin was toggled
+long debounceDelay = 10;    // the debounce time; increase if the output flickers
 
 void setup() {
-  pinMode(SafeStop, INPUT);
-  pinMode(CoilA, OUTPUT);
-  pinMode(CoilB, OUTPUT);
-  // set initial Coils state
-  digitalWrite(CoilA, StopMotor);
-  digitalWrite(CoilB, StopMotor);
+
+  //set the pins direction
+  pinMode(EmergencyStopButton, INPUT);
+  pinMode(InhibitUserControl, OUTPUT);
+  pinMode(DCInject, OUTPUT);
+
+  // set initial outputs state as disable
+  digitalWrite(InhibitUserControl, !InhibitUserControlState);
+  digitalWrite(DCInject, !DCInjectState);
+
 }
 
 void loop() {
+  // read the state of the switch into a local variable:
+  int reading = digitalRead(EmergencyStopButton);
 
-  // Store the reading of the Stop in a variable
-  int reading = digitalRead(SafeStop);
+  // check to see if you just pressed the button 
+  // (i.e. the input went from LOW to HIGH),  and you've waited 
+  // long enough since the last press to ignore any noise:  
 
   // If the switch changed, due to noise or pressing:
-  if (reading != lastStopMotorState) {
+  if (reading != LastEmergencyStopButtonState) {
     // reset the debouncing timer
     lastDebounceTime = millis();
   } 
@@ -46,24 +58,23 @@ void loop() {
     // than the debounce delay, so take it as the actual current state:
 
     // if the button state has changed:
-    if (reading != StopMotorState) {
-      StopMotorState = reading;
+    if (reading != EmergencyStopButtonState) {
+      EmergencyStopButtonState = reading;
 
       // only toggle the LED if the new button state is HIGH
-      if (StopMotorState == HIGH) {
-			StopMotor = !StopMotor;
-			// set the Coils:
-			digitalWrite(CoilA, StopMotor);
-			digitalWrite(CoilB, StopMotor);
-			delay(breake_duration);
-			digitalWrite(CoilA, !StopMotor);
-			digitalWrite(CoilB, !StopMotor);
-			
-			// save the reading.  Next time through the loop,
-			// it'll be the lastStopMotorState:
-			lastStopMotorState = reading;
+      if (EmergencyStopButtonState == EmergencyStopButtonTriggeredState) {
+          
+          digitalWrite(InhibitUserControl, InhibitUserControlState);    //disable the emergency button 
+          delay(250);                                                   //wait for the system to react
+          digitalWrite(DCInject, DCInjectState);                        //inject DC in to motor
+          delay(9750);                                                  //and keep doing it for ~9 secs
+          digitalWrite(DCInject, !DCInjectState);                       //release the motor
+          digitalWrite(InhibitUserControl, !InhibitUserControlState);   //reenable user controls 
       }
     }
   }
+  // save the reading.  Next time through the loop,
+  // it'll be the LastEmergencyStopButtonState:
+  LastEmergencyStopButtonState = reading;
 }
 
